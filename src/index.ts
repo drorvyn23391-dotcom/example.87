@@ -106,9 +106,9 @@ class DisTubeClient extends Client<true> {
       const E = await import(`./events/distube/${name}`);
       const event = new E.default(this);
 
-      this.distube.on(event.name, (...args) => {
-        void event.execute(...args);
-      });
+      this.distube.on(event.name, (...args: DisTubeEvents[typeof event.name]) => {
+  void event.execute(...args);
+});
 
       console.log(`Listened DisTube event: ${event.name}.`);
       return false;
