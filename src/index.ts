@@ -30,7 +30,6 @@ export const followUp = async (
   embed: EmbedBuilder,
   textChannel: GuildTextBasedChannel,
 ) => {
-  // Follow up interaction if created time is less than 15 minutes.
   if (Date.now() - interaction.createdTimestamp < 15 * 60 * 1000) {
     await interaction.followUp({ embeds: [embed] });
   } else {
@@ -80,9 +79,8 @@ class DisTubeClient extends Client<true> {
 
       return false;
     } catch (err: any) {
-      const e = `Unable to load command ${name}: ${err.stack || err}`;
-      console.error(e);
-      return e;
+      console.error(`Unable to load command ${name}:`, err);
+      return `Unable to load command ${name}: ${err.stack || err}`;
     }
   }
 
@@ -90,16 +88,16 @@ class DisTubeClient extends Client<true> {
     try {
       const E = await import(`./events/client/${name}`);
       const event = new E.default(this);
-      const fn = event.run.bind(event);
 
-      this.on(event.name, fn);
+      this.on(event.name, (...args) => {
+        void event.execute(...args);
+      });
+
       console.log(`Listened client event: ${event.name}.`);
-
       return false;
     } catch (err: any) {
-      const e = `Unable to listen "${name}" event: ${err.stack || err}`;
-      console.error(e);
-      return e;
+      console.error(`Unable to listen "${name}" event:`, err);
+      return `Unable to listen "${name}" event: ${err.stack || err}`;
     }
   }
 
@@ -107,38 +105,19 @@ class DisTubeClient extends Client<true> {
     try {
       const E = await import(`./events/distube/${name}`);
       const event = new E.default(this);
-      const fn = event.run.bind(event);
 
-      this.distube.on(event.name, fn);
+      this.distube.on(event.name, (...args) => {
+        void event.execute(...args);
+      });
+
       console.log(`Listened DisTube event: ${event.name}.`);
-
       return false;
     } catch (err: any) {
-      const e = `Unable to listen "${name}" event: ${err.stack || err}`;
-      console.error(e);
-      return e;
+      console.error(`Unable to listen "${name}" event:`, err);
+      return `Unable to listen "${name}" event: ${err.stack || err}`;
     }
   }
 }
-
-const client = new DisTubeClient({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.MessageContent,
-  ],
-});
-
-if (!TOKEN) {
-  throw new Error(
-    "Missing Discord token. Set TOKEN or DISCORD_TOKEN in the hosting environment.",
-  );
-}
-
-client.login(TOKEN).catch((error: unknown) => {
-  console.error("Discord login failed:", error);
-});
 
 export interface Metadata {
   interaction: ChatInputCommandInteraction<"cached">;
@@ -190,7 +169,7 @@ export abstract class ClientEvent<
     try {
       await this.run(...args);
     } catch (err) {
-      console.error(err);
+      console.error(`Client event ${String(this.name)} failed:`, err);
     }
   }
 }
@@ -215,7 +194,42 @@ export abstract class DisTubeEvent<
     try {
       await this.run(...args);
     } catch (err) {
-      console.error(err);
+      console.error(`DisTube event ${String(this.name)} failed:`, err);
     }
   }
 }
+
+if (!TOKEN) {
+  throw new Error(
+    "Missing Discord token. Set TOKEN or DISCORD_TOKEN in FadeHost environment variables.",
+  );
+}
+
+const client = new DisTubeClient({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.MessageContent,
+  ],
+});
+
+client.once("ready", () => {
+  console.log(`Bot online as ${client.user.tag}`);
+});
+
+client.on("error", (error) => {
+  console.error("Discord client error:", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+});
+
+client.login(TOKEN).catch((error: unknown) => {
+  console.error("Discord login failed:", error);
+});
